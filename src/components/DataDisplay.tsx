@@ -12,10 +12,10 @@ export default function DataDisplay({ data }: DataDisplayProps) {
       {/* Header Information */}
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-xl font-semibold mb-4">File Information</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           <div>
             <p className="text-sm text-gray-500">Creation Date</p>
-            <p className="font-medium">{data.header.creationDate.toLocaleString()}</p>
+            <p className="font-medium">{data.header.creationDate.toISOString()}</p>
           </div>
           {data.header.vboxInfo.version && (
             <div>
@@ -48,6 +48,33 @@ export default function DataDisplay({ data }: DataDisplayProps) {
             </div>
           )}
         </div>
+
+        {/* Comments Section */}
+        {data.header.comments && data.header.comments.length > 0 && (
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-medium mb-2">Comments</h3>
+            <ul className="space-y-2">
+              {data.header.comments.map((comment, index) => (
+                <li key={index} className="text-gray-700">{comment}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Channel Units */}
+        {data.header.channelUnits && data.header.channelUnits.length > 0 && (
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-medium mb-2">Channel Units</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {data.header.columnNames.map((name, index) => (
+                <div key={index}>
+                  <p className="text-sm text-gray-500">{name}</p>
+                  <p className="font-medium">{data.header.channelUnits?.[index] || '-'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Data Table */}
