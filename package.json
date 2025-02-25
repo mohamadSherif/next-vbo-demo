@@ -9,11 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@react-google-maps/api": "^2.20.6",
     "next": "15.1.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.5",
-    "vbo-reader": "file:../vbo-reader"
+    "recharts": "^2.15.1",
+    "vbo-reader": "^1.2.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

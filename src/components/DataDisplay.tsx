@@ -1,14 +1,204 @@
 'use client';
 
 import { ParsedVBOFile } from 'vbo-reader';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { GoogleMap, LoadScript, Marker, Polyline } from '@react-google-maps/api';
+import { useMemo, useState, useCallback } from 'react';
 
 interface DataDisplayProps {
   data: ParsedVBOFile;
 }
 
+
 export default function DataDisplay({ data }: DataDisplayProps) {
+  // Debug: Log the first few data points to see what we're working with
+  console.log('First 5 data points:', data.data.slice(0, 5));
+  
+  // Helper function to parse coordinates from string format like "31°19'5.9838\"N"
+  const parseCoordinate = (coord: string | number): number => {
+    if (typeof coord === 'number') return coord;
+    
+    try {
+      // Parse degrees°minutes'seconds"direction format
+      const match = coord.match(/(\d+)°(\d+)'([\d.]+)"([NSEW])/);
+      if (!match) return 0;
+      
+      const [, degrees, minutes, seconds, direction] = match;
+      let decimal = parseInt(degrees) + parseInt(minutes) / 60 + parseFloat(seconds) / 3600;
+      
+      // Apply negative value for South or West
+      if (direction === 'S' || direction === 'W') {
+        decimal = -decimal;
+      }
+      
+      return decimal;
+    } catch (e) {
+      console.error('Error parsing coordinate:', coord, e);
+      return 0;
+    }
+  };
+  
+  // Convert all coordinates to numeric values
+  const numericCoordinates = data.data.map(point => ({
+    ...point,
+    latitude: parseCoordinate(point.latitude),
+    longitude: parseCoordinate(point.longitude)
+  }));
+  
+  // Filter out invalid coordinates
+  const validCoordinates = numericCoordinates.filter(
+    point => 
+      point.latitude !== 0 && 
+      point.longitude !== 0 &&
+      !isNaN(point.latitude) && 
+      !isNaN(point.longitude)
+  );
+  
+  // Debug: Log the number of valid coordinates found
+  console.log('Valid coordinates found:', validCoordinates.length);
+  if (validCoordinates.length > 0) {
+    console.log('First valid coordinate:', validCoordinates[0]);
+  }
+
+  // Calculate center of the map if we have valid coordinates
+  const mapCenter = validCoordinates.length > 0 
+    ? [
+        validCoordinates.reduce((sum, point) => sum + point.latitude, 0) / validCoordinates.length,
+        validCoordinates.reduce((sum, point) => sum + point.longitude, 0) / validCoordinates.length
+      ] as [number, number]
+    : [0, 0] as [number, number];
+
+  // Convert coordinates to format needed for Google Maps
+  const routePoints = validCoordinates.map(point => ({
+    lat: point.latitude,
+    lng: point.longitude
+  }));
+  
+  // Get start and end points if available
+  const startPoint = routePoints.length > 0 ? routePoints[0] : null;
+  const endPoint = routePoints.length > 1 ? routePoints[routePoints.length - 1] : null;
+  
+  // Google Maps container style
+  const mapContainerStyle = useMemo(() => ({
+    width: '100%',
+    height: '400px'
+  }), []);
+  
+  // Google Maps options
+  const mapOptions = useMemo(() => ({
+    disableDefaultUI: false,
+    clickableIcons: true,
+    scrollwheel: true,
+  }), []);
+  
+  // Google Maps center
+  const center = useMemo(() => {
+    if (validCoordinates.length === 0) {
+      return { lat: 0, lng: 0 };
+    }
+    
+    return {
+      lat: validCoordinates.reduce((sum, point) => sum + point.latitude, 0) / validCoordinates.length,
+      lng: validCoordinates.reduce((sum, point) => sum + point.longitude, 0) / validCoordinates.length
+    };
+  }, [validCoordinates]);
   return (
     <div className="w-full max-w-6xl mx-auto p-4 space-y-8">
+      {/* Map with Route Trace */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-xl font-semibold mb-4">GPS Route Map</h2>
+        <div className="h-96 w-full">
+          {validCoordinates.length > 0 ? (
+            <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}>
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={center}
+                zoom={13}
+                options={mapOptions}
+              >
+                {/* Route polyline */}
+                <Polyline
+                  path={routePoints}
+                  options={{
+                    strokeColor: '#3b82f6',
+                    strokeOpacity: 1,
+                    strokeWeight: 3,
+                  }}
+                />
+                
+                {/* Start marker */}
+                {startPoint && (
+                  <Marker
+                    position={startPoint}
+                    icon={{
+                      url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                      scaledSize: typeof window !== 'undefined' && window.google ? 
+                        new window.google.maps.Size(40, 40) : undefined
+                    }}
+                    title="Start Point"
+                  />
+                )}
+                
+                {/* End marker */}
+                {endPoint && (
+                  <Marker
+                    position={endPoint}
+                    icon={{
+                      url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                      scaledSize: typeof window !== 'undefined' && window.google ? 
+                        new window.google.maps.Size(40, 40) : undefined
+                    }}
+                    title="End Point"
+                  />
+                )}
+              </GoogleMap>
+            </LoadScript>
+          ) : (
+            <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+              <p className="text-gray-500">No valid GPS coordinates found in the data</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Velocity Graph */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-xl font-semibold mb-4">Velocity Graph</h2>
+        <div className="h-80 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={data.data.map((row, index) => ({
+                index,
+                time: row.time,
+                velocity: row.velocity
+              }))}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="time" 
+                label={{ value: 'Time', position: 'insideBottomRight', offset: -10 }}
+                tick={{ fontSize: 12 }}
+              />
+              <YAxis 
+                label={{ value: 'Velocity (km/h)', angle: -90, position: 'insideLeft' }}
+                tick={{ fontSize: 12 }}
+              />
+              <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} km/h`, 'Velocity']} />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="velocity" 
+                stroke="#3b82f6" 
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 6 }}
+                name="Velocity"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
       {/* Header Information */}
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-xl font-semibold mb-4">File Information</h2>
